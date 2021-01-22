@@ -7,16 +7,16 @@ tablename_colname_dict = {}
 possible_aggr_funcs = ["max", "min", "cou", "ave", "sum"]
 all_col_names_list = []
 
-def apply_groupby(groupby_aggr_col_index, groupby_proj_col_index, aggrs):
+def apply_groupby(groupby_aggr_col_index, groupby_proj_col_index, aggrs, groupby_col):
     groupby_dict = {}
     unique_proj = []
     final_output = []
     ans = []
-    # print ("group by aggr index : ", groupby_aggr_col_index)
+
     for i in range(len(all_data)):
-        if all_data[i][groupby_proj_col_index] not in unique_proj:
-            val = all_data[i][groupby_proj_col_index]
-            unique_proj.append(all_data[i][groupby_proj_col_index])
+        if all_data[i][groupby_col] not in unique_proj:
+            val = all_data[i][groupby_col]
+            unique_proj.append(all_data[i][groupby_col])
             if groupby_proj_col_index==-1:
                 ans = []
             else:
@@ -26,7 +26,7 @@ def apply_groupby(groupby_aggr_col_index, groupby_proj_col_index, aggrs):
                 dummy = []
                 
                 for k in range(len(all_data)):
-                    if  all_data[k][groupby_proj_col_index]==val:
+                    if  all_data[k][groupby_col]==val:
                         dummy.append(all_data[k][index])
                 
                 aggr_func = aggrs[j]
@@ -40,19 +40,15 @@ def apply_groupby(groupby_aggr_col_index, groupby_proj_col_index, aggrs):
                     ans.append(round(sum(dummy)/len(dummy),2))
                 elif aggr_func=="sum":
                     ans.append(sum(dummy))
-                
-                # print ("ans : ", ans)
-
             final_output.append(ans)
-        # print ("apply group by : ", val, "   ans list : ", ans)
     return final_output
                 
-
 
 def validateGroupby(projected_cols, aggr_cols, aggrs):
     if len(aggr_cols) != len(aggrs) or (len(projected_cols)>1):
         return False
     return True
+
 
 def get_col_index(condition):
     left = -1
@@ -69,6 +65,7 @@ def get_col_index(condition):
                     break
             j+=1
     return left, right
+
 
 def split_operators(cond):
     op = ""
@@ -99,6 +96,7 @@ def split_operators(cond):
         splitted_op.append(op)
 
     return list(map(str.strip,splitted_op))
+
 
 def apply_where(condition):
     c = condition.split(" ")
@@ -163,6 +161,7 @@ def apply_where(condition):
     
     return eval_output
 
+
 def get_sorted_output(output, sorting_order, orderby_col_index):
     print ("in func sorting order : :", sorting_order)
     if sorting_order.lower() == "asc":
@@ -171,6 +170,7 @@ def get_sorted_output(output, sorting_order, orderby_col_index):
         output = sorted(output, key=lambda x: (x[orderby_col_index]), reverse=True)
 
     return output
+
 
 def checkSortingOrder(col):
     col = col.strip()
@@ -200,7 +200,7 @@ def apply_aggr_func(req_cols, aggr):
         dummy = []
         if req_cols[i]=="*" :
             if aggr[i]!="count" :
-                print ("syntax error :'*' wrongly used" )
+                print ("syntax error :'*' can only be used with count" )
                 sys.exit()
             else:
                 count = len(all_data)
@@ -305,7 +305,7 @@ def getJoinedData(table_names_list, is_distinct_present):
         return table_data
 
 
-def seperate_aggr_groupby(query_cols_with_aggr):
+def seperate_aggr_groupby(query_cols_with_aggr, groupby_col):
     aggr = []
     projected_cols = []
     aggr_cols = []
@@ -315,15 +315,36 @@ def seperate_aggr_groupby(query_cols_with_aggr):
             aggr.append(col.split("(")[0])
             col_to_be_added = col.split("(")[1][:-1]
             print ("in sepe aggr lop : ", col_to_be_added)
-
-            for col_names in all_col_names_list:
-                if col_names.endswith("."+col_to_be_added):
-                    aggr_cols.append(col_names)
+            col_found=False
+            if col_to_be_added=="*" :
+                if col.split("(")[0]!="count":
+                    print ("syntax error : * can only be used with count")
+                    sys.exit()
+                for col in all_col_names_list:
+                    if col.endswith(groupby_col):
+                        aggr_cols.append(col)
+                        col_found=True
+                        break
+            else:
+                for col_names in all_col_names_list:
+                    if col_names.endswith("."+col_to_be_added):
+                        aggr_cols.append(col_names)
+                        col_found=True
+                        break
             # query_cols.append(col.split("(")[1][:-1])
         else:
+            col_found=False
+            if col=="*":
+                print ("syntax error : * not used in groupby without aggr func")
+                sys.exit()
             for col_names in all_col_names_list:
                 if col_names.endswith("."+col):
                     projected_cols.append(col_names)
+                    col_found=True
+                    break
+        if col_found==False:
+            print ("column not found")
+            sys.exit()
             # query_cols.append(col)
     return projected_cols, aggr_cols, aggr
 
@@ -339,23 +360,34 @@ def seperate_aggr(query_cols_with_aggr):
             aggr.append(col.split("(")[0])
             col_to_be_added = col.split("(")[1][:-1]
             print ("in sepe aggr lop : ", col_to_be_added)
+            col_found=False
             if col_to_be_added=="*":
                 query_cols.append("*")
+                col_found=True
             else:
                 for col_names in all_col_names_list:
                     if col_names.endswith("."+col_to_be_added):
                         query_cols.append(col_names)
+                        col_found=True
+                        break
                 # query_cols.append(col.split("(")[1][:-1])
-                aggr_present = True
+            aggr_present = True
         else:
+            col_found=False
             if col=="*":
                 query_cols.append("*")
+                col_found=True
             else:
                 for col_names in all_col_names_list:
                     if col_names.endswith("."+col):
                         query_cols.append(col_names)
+                        col_found=True
+                        break
                 # query_cols.append(col)
             normal_col = True
+        if col_found==False:
+            print ("column not found")
+            sys.exit()
         if normal_col and aggr_present:
             print("normal columns and aggr function with column are present simultaneuosly")
             sys.exit()
@@ -413,23 +445,6 @@ def readQuery(query):
             orderby_col = identifier
             print ("order by foud : ", orderby_col)
             orderby_flag = False
-    """
-    if(dist>1):
-        print ("ERROR : syntax error with the usage of distinct")
-        sys.exit()
-
-    if where ==1 and len(condition.strip())==0:
-        print ("ERROR : syntax error in where clause")
-        sys.exit()
-
-    if len(components)> 5 and where ==0 :
-        print ("ERROR : syntax error")
-        sys.exit()
-
-    if len(components)== 5 and where ==0 and dist==0:
-        print (" ERROR : syntax error")
-        sys.exit()
-    """
 
     if is_distinct_present:
         query_cols_with_aggr = all_idenetifiers[2]
@@ -439,9 +454,6 @@ def readQuery(query):
     if is_orderby_present:
         sorting_order, orderby_col = checkSortingOrder(orderby_col)
         print ("sorting_order, orderby_col : ",sorting_order, orderby_col)
-
-    # if is_groupby_present:
-    #     is_valid = validateGroupby()
 
     print("query col with aggr : ", query_cols_with_aggr)
 
@@ -459,12 +471,14 @@ def readQuery(query):
     aggr_cols = []
 
     if is_groupby_present:
-        projected_cols, aggr_cols, aggrs = seperate_aggr_groupby(query_cols_with_aggr)
+        projected_cols, aggr_cols, aggrs = seperate_aggr_groupby(query_cols_with_aggr, groupby_col)
         print (" projected_cols, aggr_cols, aggrs",  projected_cols, aggr_cols, aggrs)
         is_groupby_valid = validateGroupby(projected_cols, aggr_cols, aggrs)
-
         if is_groupby_valid==False:
-            print("groupby wrongly used ")
+            print("groupby wrongly used : more than 1 projected col used")
+            sys.exit()
+        if len(projected_cols)!=0 and projected_cols[0][-1]!=groupby_col:
+            print("projected col is not same as groupby col ")
             sys.exit()
 
         groupby_proj_col_index=-1
@@ -477,15 +491,18 @@ def readQuery(query):
         
         groupby_aggr_col_index=[]
         for aggr_col in aggr_cols:
-            if aggr_col in all_col_names_list:
+            if aggr_col in all_col_names_list :
                 groupby_aggr_col_index.append(all_col_names_list.index(aggr_col))
                 
-            
+        groupby_col_index = -1
+        for col in all_col_names_list:
+            if col.endswith(groupby_col):
+                groupby_col_index = all_col_names_list.index(col)
+                break 
 
     else:
         query_cols, aggrs = seperate_aggr(query_cols_with_aggr)
 
-    
     print("query cols : ", query_cols)
     print("aggrs : ", aggrs)
     print("table name lst : ", table_names_list)
@@ -494,32 +511,20 @@ def readQuery(query):
         print("INVALID QUERY : No SELECT statement\n")
         sys.exit()
 
-    # all_columns_in_sequence = find_queried_columns(table_names)
     global all_data
     all_data = getJoinedData(table_names_list, is_distinct_present)
-    print("all data : ", len(all_data))
     headers = ""
-    
-    # for value in tablename_colname_dict.values():
-    #     all_col_names_list = all_col_names_list + value
-
-    # for table_name in table_names_list:
-    #     all_col_names_list = all_col_names_list + \
-    #         tablename_colname_dict[table_name]
-    
 
     for c in query_cols:
         headers = headers + c +','
-    # headers += "\n"
 
-    # print ("all data before : ", all_data)
     if is_where_present:
         all_data = apply_where(condition)
         print ("where op : ", len(all_data))    
 
     if is_groupby_present:
-        all_data = apply_groupby(groupby_aggr_col_index, groupby_proj_col_index, aggrs)
-        print("final output after group by : ",all_data)
+        all_data = apply_groupby(groupby_aggr_col_index, groupby_proj_col_index, aggrs, groupby_col_index)
+        # print("final output after group by : ",all_data)
         headers = "<"
         for col in projected_cols:
             headers +=col+','
@@ -528,45 +533,40 @@ def readQuery(query):
         headers = headers[:-1]
         headers += ">\n"
         if is_orderby_present:
-            # for col_names in all_col_names_list:
-            #     if col_names.endswith('.'+orderby_col):
-            #         orderby_col_index = all_col_names_list.index(col_names)
-            #         break
             orderby_col_index = 0
             all_data = get_sorted_output(all_data, sorting_order, orderby_col_index)
-        print("final output after group by and order by : ",all_data)
         output = ""
         for i in range(len(all_data)):
             for j in range(len(all_data[i])):
                 output += str(all_data[i][j])+"\t"
-
             output += "\n"
         if is_distinct_present:
             output = remove_duplicate(output)
-        print("finaal outputwer :")
         print(headers+output)
-        print("len of outputwer : ", len(all_data))
         return 
 
     req_cols_index = []
-    if len(query_cols) == 1 and query_cols[0] == '*':
-        if len(aggrs)==0:
+    if len(query_cols) == 1 and query_cols[0] == '*' and len(aggrs)==0:
             headers = ""
             for col in all_col_names_list:
                 headers = headers + col + ','
-            # headers += "\n"
             for i in range(0, len(all_col_names_list)):
                 req_cols_index.append(i)
-        else:
-            req_cols_index.append("*")
     else:
         for col in query_cols:
+            if col=="*":
+                req_cols_index.append("*")
+                continue
             print("col in trial : ", col)
             try:
                 req_cols_index.append(all_col_names_list.index(col))
             except Exception:
                 print("required col not found \n")
                 sys.exit()
+
+    if is_groupby_present==False and len(aggrs)!=len(req_cols_index):
+        print("Syntax error : normal col and aggr col used together")
+        sys.exit()
 
     print("req cols index : ", req_cols_index)
     if len(aggrs) == 0:
@@ -576,7 +576,6 @@ def readQuery(query):
                     orderby_col_index = all_col_names_list.index(col_names)
                     break
             all_data = get_sorted_output(all_data, sorting_order, orderby_col_index)
-        # handle col as [*, A]  // np
         output = ""
         for i in range(len(all_data)):
             for j in req_cols_index:
@@ -589,12 +588,8 @@ def readQuery(query):
         headers = ""
         for i in range(len(query_cols)):
             headers += aggrs[i] +"(" + query_cols[i] + "),"
-        # headers += "\n"
         output = apply_aggr_func(req_cols_index, aggrs)
 
-    # orderby_col_index = all_col_names_list.index(orderby_col)
-    # if is_orderby_present:
-    #     output = get_sorted_output(output, sorting_order, orderby_col_index)
     headers = "<" + headers[:-1] +">\n"
     print("finaal outputwer :")
     print(headers+output)
@@ -620,16 +615,15 @@ def read_metadata(filename):
 def main():
     metadata_filename = "metadata.txt"
     read_metadata(metadata_filename)
-    # print ("tablename_colname_dict : ", tablename_colname_dict)\
     sqlQuery = sys.argv[1]
 
     if sqlQuery[-1] != ';':
         print("semicolon missing \n")
         sys.exit()
-
-    readQuery(sqlQuery)
-
-    # all_data = read_csv()
-
+    try:
+        readQuery(sqlQuery)
+    except Exception:
+        print ("Syntax error")
+        sys.exit()
 
 main()
